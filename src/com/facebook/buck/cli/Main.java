@@ -190,27 +190,17 @@ public final class Main {
   }
 
   /**
-   * @param args command line arguments
-   * @return an exit code or {@code null} if this is a process that should not exit
+   * Get a parser instance for building.
+   *
+   * @param projectFilesystem   The directory that is the root of the project being built.
+   * @param config              Structured representation of data read from a .buckconfig file.
+   * @param knownBuildRuleTypes A registry of all the build rules types understood by Buck.
+   * @return If a daemon, daemon's Parser instance, a new Parser otherwise
+   * @throws IOException
    */
-  @SuppressWarnings("PMD.EmptyCatchBlock")
-  public int runMainWithExitCode(File projectRoot, String... args) throws IOException {
-    if (args.length == 0) {
-      return usage();
-    }
-
-    // Create common command parameters. projectFilesystem initialization looks odd because it needs
-    // ignorePaths from a BuckConfig instance, which in turn needs a ProjectFilesystem (i.e. this
-    // solves a bootstrapping issue).
-    ProjectFilesystem projectFilesystem = new ProjectFilesystem(
-        projectRoot,
-        createBuckConfig(new ProjectFilesystem(projectRoot)).getIgnorePaths());
-    BuckConfig config = createBuckConfig(projectFilesystem);
-    Verbosity verbosity = VerbosityParser.parse(args);
-    Console console = new Console(verbosity, stdOut, stdErr, config.createAnsi());
-    KnownBuildRuleTypes knownBuildRuleTypes = new KnownBuildRuleTypes();
-
-    // Create or get and invalidate cached command parameters.
+  public Parser getParser(ProjectFilesystem projectFilesystem, BuckConfig config,
+                          KnownBuildRuleTypes knownBuildRuleTypes, Console console)
+      throws IOException {
     Parser parser;
     if (isDaemon()) {
       Daemon daemon = getDaemon(projectFilesystem, config, console);
@@ -219,15 +209,38 @@ public final class Main {
     } else {
       parser = new Parser(projectFilesystem, knownBuildRuleTypes, console);
     }
+    return parser;
+  }
 
-    Clock clock = new DefaultClock();
-    BuckEventBus buildEventBus = new BuckEventBus(
-        clock,
-        BuckEventBus.getDefaultThreadIdSupplier());
-
+  /**
+   * @param args command line arguments
+   * @return an exit code or {@code null} if this is a process that should not exit
+   */
+  @SuppressWarnings("PMD.EmptyCatchBlock")
+  public int runMainWithExitCode(File projectRoot, String... args) throws IOException {
+    if (args.length == 0) {
+      return usage();
+    }
     // Find and execute command.
     Optional<Command> command = Command.getCommandForName(args[0]);
     if (command.isPresent()) {
+      // Create common command parameters. projectFilesystem initialization looks odd because it needs
+      // ignorePaths from a BuckConfig instance, which in turn needs a ProjectFilesystem (i.e. this
+      // solves a bootstrapping issue).
+      ProjectFilesystem projectFilesystem = new ProjectFilesystem(
+          projectRoot,
+          createBuckConfig(new ProjectFilesystem(projectRoot)).getIgnorePaths());
+      BuckConfig config = createBuckConfig(projectFilesystem);
+      Verbosity verbosity = VerbosityParser.parse(args);
+      Console console = new Console(verbosity, stdOut, stdErr, config.createAnsi());
+      KnownBuildRuleTypes knownBuildRuleTypes = new KnownBuildRuleTypes();
+
+      // Create or get and invalidate cached command parameters.
+      Clock clock = new DefaultClock();
+      BuckEventBus buildEventBus = new BuckEventBus(
+          clock,
+          BuckEventBus.getDefaultThreadIdSupplier());
+
       ImmutableList<BuckEventListener> eventListeners =
           addEventListeners(buildEventBus,
               clock,
@@ -253,7 +266,7 @@ public final class Main {
           new KnownBuildRuleTypes(),
           artifactCache,
           buildEventBus,
-          parser));
+          getParser(projectFilesystem, config, knownBuildRuleTypes, console)));
 
       buildEventBus.post(CommandEvent.finished(commandName, isDaemon(), exitCode));
 
