@@ -26,6 +26,7 @@ pushd "$BUCK_BIN_DIRECTORY" > /dev/null
 pushd .. > /dev/null
 BUCK_DIRECTORY="$PWD"
 
+: <<'DISABLE_VERSION_CHECK'
 # If there is a .buckversion file in the project root, then make sure that Buck is at that version.
 # The only way to override this is to include a .nobuckcheck file in the project root.
 if [ -e "${PROJECT_ROOT}/.buckversion" ] && [ ! -e "${PROJECT_ROOT}/.nobuckcheck" ]; then
@@ -56,6 +57,7 @@ if [ -e "${PROJECT_ROOT}/.buckversion" ] && [ ! -e "${PROJECT_ROOT}/.nobuckcheck
     ant clean
   fi
 fi
+DISABLE_VERSION_CHECK
 
 # Make sure that Buck has been built.
 if [ ! -e "build/buck.jar" ]; then
@@ -86,6 +88,8 @@ fi
 BUCK_REPOSITORY_DIRTY=0
 BUCK_CURRENT_VERSION="N/A"
 BUCK_VERSION_TIMESTAMP=-1
+BUCK_VERSION_UID="${BUCK_CURRENT_VERSION}"
+: <<'DISABLE_GIT'
 if [ -d ".git" ]; then
   # Make sure buck gets passed the right version.
   BUCK_CURRENT_VERSION=`git rev-parse HEAD`
@@ -128,6 +132,7 @@ else
     BUCK_VERSION_UID="N/A"
   fi
 fi
+DISABLE_GIT
   
 # Pop back to the original directory.
 popd > /dev/null
